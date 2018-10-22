@@ -4,3 +4,5 @@ Practica2/.ipynb_checkpoints/*
 Practica2/.ipynb_checkpoints/
 *.ipynb_checkpoints/
 *.ipynb_checkpoints/*
+lib/__pycache__/
+lib/__pycache__/*
