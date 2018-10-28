@@ -210,42 +210,50 @@ def kirsch_compass(img):
     return out
 
 # Sobel
+
 def sobel_gradient(img):
+    return SobelGradient(img)
+
+def SobelGradient(anImage):
     """Calulates the gradients of the given image, using a Sobel kernel. Returns the maginute and angle for each pixel."""
-    Gx = [[-1,0,1],[-2,0,2],[-1,0,1]]
-    Gy = [[1,2,1],[0,0,0],[-1,-2,-1]]
-    J_x = convolve2d(img,Gx,mode='same')
-    J_y = convolve2d(img,Gy,mode='same')
-    J_norm = np.sqrt(np.power(J_x,2)+np.power(J_y,2))
-    J_angle = np.arctan(np.divide(J_y, J_x))
+    SobelXKernel = [[-1,0,1],[-2,0,2],[-1,0,1]]
+    SobelYKernel = [[1,2,1],[0,0,0],[-1,-2,-1]]
+    return ApplyGradientKernels(anImage, SobelXKernel, SobelYKernel)
+
+def RobertsGradient(anImage):
+    """Calulates the gradients of the given image, using a Sobel kernel. Returns the maginute and angle for each pixel."""
+    XKernel = [
+        [1,0],
+        [0,-1]
+    ]
+    YKernel = [
+        [0,1],
+        [-1,0]
+    ]
+    return ApplyGradientKernels(anImage, XKernel, YKernel)
+
+def PrewittGradient(anImage):
+    """Calulates the gradients of the given image, using a Sobel kernel. Returns the maginute and angle for each pixel."""
+    XKernel = [
+        [-1,0,1],
+        [-1,0,1],
+        [-1,0,1]
+    ]
+    YKernel = [
+        [-1,-1,-1],
+        [0,0,0],
+        [1,1,1]
+    ]
+    return ApplyGradientKernels(anImage, XKernel, YKernel)
+
+def ApplyGradientKernels(anImage, XKernel, Ykernel):
+    def doApplyradientKernels(aKernel):
+        return convolve2d(anImage,aKernel,mode='same')
+    XGradient, YGradient = doApplyradientKernels(XKernel), doApplyradientKernels(Ykernel)
+    return RectangularToPolarGradient(XGradient, YGradient)
+
+def RectangularToPolarGradient(gradientX, gradientY):
+    """Given the gradient's X and Y direction, returns the polar coodrinates of it."""
+    J_norm = np.sqrt(np.power(gradientX,2)+np.power(gradientY,2))
+    J_angle = np.arctan(np.divide(gradientY, gradientX))
     return J_norm, J_angle
-
-def canny(img):
-    # obtencion del gradiente
-    J_norm, J_angle = sobel_gradient(img)
-    # supresion de no maximos
-    # save image form after_maximum_supression use
-    maximum_supressed_img = np.copy(img)
-
-    for i in range(len(img)):
-        for j in range(len(img[0])):
-            # angulo mas cercano al de pixel que estoy viendo
-            # Devuelve un ENUM de tipo 'CheckingAngle', para poder saber que angulo es
-            # sin problemas numéricos
-            matching_angle = get_closest_angle(J_angle[i,j])
-    # histeresis de umbral
-
-    return 0
-
-
-# def non_maximum_supression(img,i,j,angle):
-
-def get_closest_angle(angle):
-    checking_angles = [np.pi*f for f in [0,1/4,1/2,3/4]]
-    angle_names = [CheckingAngle.A ,CheckingAngle.B ,CheckingAngle.C ,CheckingAngle.D]
-    closest_diff = np.Infinity; closest_index = 0
-    for i in range(len(checking_angles)):
-        if abs(checking_angles[i] - angle) < closest_diff:
-            closest_diff = abs(checking_angles[i] - angle)
-            closes_index = i
-    return angle_names[closest_index]

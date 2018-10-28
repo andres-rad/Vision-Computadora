@@ -1,4 +1,4 @@
-from .edge_detectors import _gaussian_kern, sobel_gradient
+from .edge_detectors import _gaussian_kern, SobelGradient, RobertsGradient, PrewittGradient
 from scipy.signal import convolve2d
 import numpy as np
 
@@ -57,6 +57,8 @@ class CannyEdgeDetector():
             AngleMatcher(-np.pi/4, (1,1), (-1,-1))
         ])
 
+        self.gradientCalculator = SobelGradient
+
         if kwargs is not None:
             for arg in kwargs:
                 if arg == 'gaussianBlurKernelDimension':
@@ -69,6 +71,14 @@ class CannyEdgeDetector():
                     self.lowerThreshold = kwargs[arg]
                 elif arg == 'upperThreshold':
                     self.upperThreshold = kwargs[arg]
+                elif arg == 'gradient':
+                    self.configureGradientCalculator(kwargs[arg])
+    
+    def configureGradientCalculator(self, aGradientName):
+        if aGradientName == 'Prewitt':
+            self.gradientAngle = PrewittGradient
+        elif aGradientName == 'Roberts':
+            self.gradientCalculator = RobertsGradient
 
     def apply(self):
         """Apply canny edge detector to image."""
@@ -79,7 +89,7 @@ class CannyEdgeDetector():
 
         # Determine intensity and angle of gradient for blurred image
         # Add a KWArgument to select method of calculating the gradients, by default its sobel
-        self.gradientNorm, self.gradientAngle = sobel_gradient(self.image)
+        self.gradientNorm, self.gradientAngle = self.gradientCalculator(self.image)
 
         # Apply non maximum supression
         self.nonMaximumSupression()
