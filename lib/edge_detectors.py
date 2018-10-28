@@ -55,9 +55,9 @@ def LLV(img, th, _kernel_size = 3, _smooth_pre_laplacian = False):
     _M = len(img[0]) # cols
     if _smooth_pre_laplacian:
         img_smoothed = convolve2d(img, _mean_kernel(3), mode='same') 
-        _laplacian = laplacian(img_smoothed)
+        _laplacian = laplacianEdgeDetector(img_smoothed)
     else:
-        _laplacian = laplacian(img)
+        _laplacian = laplacianEdgeDetector(img)
     for i in range(len(img)):
         for j in range(len(img[0])):
            # check zero point crossing 
@@ -104,7 +104,7 @@ def LOG(img, sigma, _kernel_size = 3):
     _M = len(img[0]) # cols
     # _laplacian = convolve2d(img, _LOG_kern(_kernel_size, sigma), mode='same') 
     _laplacian = convolve2d(img, _gaussian_kern(_kernel_size, sigma), mode='same') 
-    _laplacian = laplacian(_laplacian)
+    _laplacian = laplacianEdgeDetector(_laplacian)
     # print(_laplacian)
     for i in range(len(img)):
         for j in range(len(img[0])):
@@ -211,12 +211,13 @@ def kirsch_compass(img):
 
 # Sobel
 def sobel_gradient(img):
+    """Calulates the gradients of the given image, using a Sobel kernel. Returns the maginute and angle for each pixel."""
     Gx = [[-1,0,1],[-2,0,2],[-1,0,1]]
     Gy = [[1,2,1],[0,0,0],[-1,-2,-1]]
     J_x = convolve2d(img,Gx,mode='same')
     J_y = convolve2d(img,Gy,mode='same')
     J_norm = np.sqrt(np.power(J_x,2)+np.power(J_y,2))
-    J_angle = np.divide(J_y, J_x)
+    J_angle = np.arctan(np.divide(J_y, J_x))
     return J_norm, J_angle
 
 def canny(img):
@@ -232,10 +233,6 @@ def canny(img):
             # Devuelve un ENUM de tipo 'CheckingAngle', para poder saber que angulo es
             # sin problemas numéricos
             matching_angle = get_closest_angle(J_angle[i,j])
-            
-    
-    
-
     # histeresis de umbral
 
     return 0
@@ -246,9 +243,9 @@ def canny(img):
 def get_closest_angle(angle):
     checking_angles = [np.pi*f for f in [0,1/4,1/2,3/4]]
     angle_names = [CheckingAngle.A ,CheckingAngle.B ,CheckingAngle.C ,CheckingAngle.D]
-    closest_diff = np.Infinity; closest_index = 0;
+    closest_diff = np.Infinity; closest_index = 0
     for i in range(len(checking_angles)):
         if abs(checking_angles[i] - angle) < closest_diff:
             closest_diff = abs(checking_angles[i] - angle)
-            closes_index = i;
+            closes_index = i
     return angle_names[closest_index]
