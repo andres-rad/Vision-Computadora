@@ -24,6 +24,18 @@ class AngleMatcher():
     def getRightNeighbour(self, i, j):
         return (i + self.rightNeighbour[0], j + self.rightNeighbour[1])
 
+class MatcherFinder():
+    def __init__(self, matchersList):
+        self.matchers = matchersList
+    
+    def find(self, anAngle):
+        for matcher in self.matchers:
+            if matcher.matches(anAngle):
+                return matcher
+
+        # By default, return first matcher in list
+        return self.matchers[0]
+
 class CannyEdgeDetector():
 
     def __init__(self, anImage, **kwargs):
@@ -34,6 +46,16 @@ class CannyEdgeDetector():
         # Maybe add KWArguments for special parameters configuraion
         self.gaussianBlurKernelDimension = 5
         self.gaussianBlurKernelDeviation = 1
+        self.shouldApplyThresholding = True
+        self.lowerThreshold = 100
+        self.upperThreshold = 150
+
+        self.angleMatcherFinder = MatcherFinder([
+            AngleMatcher(np.pi/2, (-1,0), (1,0)),
+            AngleMatcher(np.pi/4, (-1,1), (1,-1)),
+            AngleMatcher(0, (0,1), (-1,0)),
+            AngleMatcher(-np.pi/4, (1,1), (-1,-1))
+        ])
 
         if kwargs is not None:
             for arg in kwargs:
@@ -41,15 +63,19 @@ class CannyEdgeDetector():
                     self.gaussianBlurKernelDimension = kwargs[arg]
                 elif arg == 'gaussianBlurKernelDeviation':
                     self.gaussianBlurKernelDeviation = kwargs[arg]
+                elif arg == 'shouldApplyThresholding':
+                    self.shouldApplyThresholding = False
+                elif arg == 'lowerThreshold':
+                    self.lowerThreshold = kwargs[arg]
+                elif arg == 'upperThreshold':
+                    self.upperThreshold = kwargs[arg]
 
     def apply(self):
         """Apply canny edge detector to image."""
         # Convert image to grayscale if necessary
 
         # Apply gaussain blur
-        gaussianBlurKernel = _gaussian_kern(self.gaussianBlurKernelDimension, self.gaussianBlurKernelDeviation)
-        print("Gaussian kernel being used: \n", gaussianBlurKernel)
-        self.image = convolve2d(self.image, gaussianBlurKernel, mode='same')
+        self.applyGaussianKernel()
 
         # Determine intensity and angle of gradient for blurred image
         # Add a KWArgument to select method of calculating the gradients, by default its sobel
@@ -58,14 +84,21 @@ class CannyEdgeDetector():
         # Apply non maximum supression
         self.nonMaximumSupression()
 
-        # "Umbralización por histerésis"
+        if self.shouldApplyThresholding:
+            # Hystheresis thresholding
+            self.hystheresisThresholding()
 
         # Close contours
         return self.edges
 
+    def applyGaussianKernel(self):
+        gaussianBlurKernel = _gaussian_kern(self.gaussianBlurKernelDimension, self.gaussianBlurKernelDeviation)
+        self.image = convolve2d(self.image, gaussianBlurKernel, mode='same')
+    
     def nonMaximumSupression(self): 
         # Initilize edge detected image
-        self.edges = np.zeros(self.image.shape, dtype=np.uint8)
+        self.edges = np.zeros(self.image.shape, dtype=np.float)
+        self.debugEdges = np.zeros(self.image.shape, dtype=np.uint8)
 
         # For each pixel, do non maximum supression
         # Leave a 1 pixel border around the image to avoid border cases
@@ -77,26 +110,41 @@ class CannyEdgeDetector():
     def doNonMaximumSupression(self, i, j):
         # Find matching angle
         currentAngle = self.gradientAngle[i, j]
-        matcher = None
 
         # Since np.arctan results in an angle between pi/2 and -pi/2
-        angleMatchers = [
-            AngleMatcher(np.pi/2, (0,1), (0,-1)),
-            AngleMatcher(np.pi/4, (1,1), (-1,-1)),
-            AngleMatcher(0, (-1,0), (1,0)),
-            AngleMatcher(-np.pi/4, (-1,1), (1, -1))
-        ]
+        # For each angle matcher, since the gradient direction is perpendicular to the edge direction,
+        # the selected neighbours should consider this.
+        # See: http://www.sci.utah.edu/~gerig/CS6640-F2012/Materials/Canny-Gerig-Slides-updated.pdf slide 18
 
-        for index, angleMatcher in enumerate(angleMatchers):
-            if angleMatcher.matches(currentAngle):
-                matcher = angleMatcher
-                break
+        matcher = self.angleMatcherFinder.find(currentAngle)
 
-        # Angle should be -pi/2 if not set already
-        if matcher is None:
-            matcher = angleMatchers[0]
-        
         # Check if its an edge
         if matcher.isEdge(self.gradientNorm, i, j):
+            self.edges[i,j] = self.gradientNorm[i,j]
+
+    def hystheresisThresholding(self):
+        self.afterSupressionEdges = np.copy(self.edges)
+        self.edges = np.zeros(self.edges.shape)
+
+        for i in np.arange(1, self.imageWidth-1):
+            for j in np.arange(1, self.imageHeight-1):
+                if self.afterSupressionEdges[i,j] > self.upperThreshold:
+                    self.doHystheresisThresholding(i,j)
+
+    def doHystheresisThresholding(self, i, j):
+        # Set upper threshold pixel as an edge
+        self.edges[i,j] = 255
+        # Expand it starting
+        matcher = self.angleMatcherFinder.find(self.gradientAngle[i,j])
+        leftNeighbour = matcher.getLeftNeighbour(i,j)
+        rightNeighbour = matcher.getRightNeighbour(i,j)
+        if self.edges[leftNeighbour] != 255 and self.afterSupressionEdges[leftNeighbour] > self.lowerThreshold:
             self.edges[i,j] = 255
+            self.doHystheresisThresholdingWithPosition(leftNeighbour)
+        if self.edges[rightNeighbour] != 255 and self.afterSupressionEdges[rightNeighbour] > self.lowerThreshold:
+            self.edges[i,j] = 255
+            self.doHystheresisThresholdingWithPosition(rightNeighbour)
     
+    def doHystheresisThresholdingWithPosition(self, aPosition):
+        """Do apply hystheresis thresholding but with a tuple-like argument."""
+        self.doHystheresisThresholding(aPosition[0], aPosition[1])
