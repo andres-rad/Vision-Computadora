@@ -70,6 +70,56 @@ def convolvedMoravecCornerDetection(image, threshold = 100, overdrawCorners = Fa
 
     return minimizedCornerness
 
+from .edge_detectors import _gaussian_kern as getGaussianKernel
+
+import math
+
+def harrisCornerDetector(image, Rthreshold = 100, windowSize = 3):
+    cornerness = np.zeros(image.shape)
+
+    # Use numpy default gradient operator, change later to a gaussian gradient?
+    dx, dy = np.gradient(image)
+    Ixx = dx ** 2
+    Iyy = dy ** 2
+    Ixy = dx * dy
+
+    # Take by default a 5x5 gaussian kernel with sigma = 1
+    gaussianKernel = getGaussianKernel(5, 1)
+    Ixx =  convolve2d(Ixx, gaussianKernel, mode="same")
+    Iyy =  convolve2d(Iyy, gaussianKernel, mode="same")
+    Ixy =  convolve2d(Ixy, gaussianKernel, mode="same")
+
+    offset = math.floor(windowSize/2)
+
+    # Taking by default a 3x3 window, change later
+    for i in np.arange(offset, image.shape[0]-offset):
+        for j in np.arange(offset, image.shape[1]-offset):
+            # W refers to the current window 
+            Wxx = Ixx[i-offset:i+1+offset, j-offset:j+offset+1]
+            Wyy = Iyy[i-offset:i+1+offset, j-offset:j+offset+1]
+            Wxy = Ixy[i-offset:i+1+offset, j-offset:j+offset+1]
+
+            # Compute cornerness measure
+            Sxx = np.sum(Wxx)
+            Syy = np.sum(Wyy)
+            Sxy = np.sum(Wxy)
+
+            # Empiric constant
+            alpha = .05
+            determinant = Sxx*Syy - Sxy ** 2
+            trace = Sxx + Syy
+            # Harris measure
+            R = determinant - alpha * (trace**2)
+
+            if R > Rthreshold:
+                cornerness[i,j] = R
+
+    # TODO:Step missing: Non-Maximum supression
+
+    return cornerness
+
+
+
                 
 
 
