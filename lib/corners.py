@@ -39,10 +39,7 @@ from scipy.signal import convolve2d
 
 def convolvedMoravecCornerDetection(image, threshold = 100, overdrawCorners = False):
     """Convolved version of the Moravec corner operator."""
-    # Assuming BW 1 byte image
-    cornerGrade = np.zeros(image.shape, dtype=np.uint8)
-    # Moravec window displacements
-    windowDisplacements = [(1,0), (0,1), (-1,1), (1,1)]
+    # Window kernel for each displacement direction
     windowsKernels = [
         np.array([[-1,1]]),
         np.array([[1],[-1]]),
@@ -50,16 +47,20 @@ def convolvedMoravecCornerDetection(image, threshold = 100, overdrawCorners = Fa
         np.array([[-1,0],[0,1]])
     ]
 
+    # Calculate convolution for each displacement, and obtain square difference
     displacedImages = [convolve2d(image, aKernel, mode='same') for aKernel in windowsKernels]
     displacedImages = [np.multiply(displacedImage, displacedImage) for displacedImage in displacedImages]
 
+    # Minimum across all displacements
     minimizedCornerness = displacedImages[0]
     for i in range(1, len(displacedImages)):
         minimizedCornerness = np.minimum(minimizedCornerness, displacedImages[i])
 
+    # Apply theshold
     belowCornernessThreshold = minimizedCornerness < threshold
     minimizedCornerness[belowCornernessThreshold] = 0
 
+    # Overdraw if necessary
     if overdrawCorners:
         aboveCornernessThreshold = ~belowCornernessThreshold
         for i in np.arange(1, image.shape[0]-1):
